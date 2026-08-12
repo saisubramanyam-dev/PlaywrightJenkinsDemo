@@ -1,5 +1,5 @@
-
 // webhook test
+
 pipeline {
     agent any
 
@@ -14,7 +14,7 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                bat 'C:\\Users\\User\\AppData\\Local\\Python\\bin\\python.exe -m pytest'
+                bat 'C:\\Users\\User\\AppData\\Local\\Python\\bin\\python.exe -m pytest --html=report.html --self-contained-html'
             }
         }
     }
