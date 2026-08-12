@@ -1,22 +1,10 @@
+import html
+from pathlib import Path
+
 import pytest
 
 
-TEST_DATA = {
-    "test_login_page_title": {
-        "test_id": "TC_001",
-        "scenario": "Verify Login Page Title",
-        "description": "Verify that the login page displays the correct title.",
-        "steps": "1. Open login page\n2. Verify page title",
-        "expected": "The Internet",
-    },
-    "test_login_page_url": {
-        "test_id": "TC_002",
-        "scenario": "Verify Login Page URL",
-        "description": "Verify that the login page URL is correct.",
-        "steps": "1. Open login page\n2. Verify current URL",
-        "expected": "https://the-internet.herokuapp.com/login",
-    },
-}
+RESULTS = []
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -24,54 +12,177 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    # Only attach our custom data to the actual test execution
-    if report.when == "call":
-        data = TEST_DATA.get(item.name, {})
-
-        report.test_id = data.get("test_id", "")
-        report.scenario = data.get("scenario", "")
-        report.description = data.get("description", "")
-        report.steps = data.get("steps", "")
-        report.expected = data.get("expected", "")
-
-        if report.passed:
-            if item.name == "test_login_page_title":
-                report.actual = "The Internet"
-            elif item.name == "test_login_page_url":
-                report.actual = "https://the-internet.herokuapp.com/login"
-            else:
-                report.actual = "PASS"
-        else:
-            report.actual = "Test Failed"
-
-
-def pytest_html_results_table_header(cells):
-    cells.insert(2, "<th>Test ID</th>")
-    cells.insert(3, "<th>Scenario</th>")
-    cells.insert(4, "<th>Description</th>")
-    cells.insert(5, "<th>Test Steps</th>")
-    cells.insert(6, "<th>Expected Result</th>")
-    cells.insert(7, "<th>Actual Result</th>")
-
-
-def pytest_html_results_table_row(report, cells):
-    # Some pytest-html rows are not the actual test-call report.
-    # Ignore those rows.
-    if not hasattr(report, "test_id"):
+    if report.when != "call":
         return
 
-    test_id = getattr(report, "test_id", "")
-    scenario = getattr(report, "scenario", "")
-    description = getattr(report, "description", "")
-    steps = getattr(report, "steps", "")
-    expected = getattr(report, "expected", "")
-    actual = getattr(report, "actual", "")
+    status = "PASS" if report.passed else "FAIL"
 
-    steps = steps.replace("\n", "<br>")
+    if report.failed:
+        actual = getattr(item, "actual", "Test failed")
+    else:
+        actual = getattr(item, "actual", "")
 
-    cells.insert(2, f"<td>{test_id}</td>")
-    cells.insert(3, f"<td>{scenario}</td>")
-    cells.insert(4, f"<td>{description}</td>")
-    cells.insert(5, f"<td>{steps}</td>")
-    cells.insert(6, f"<td>{expected}</td>")
-    cells.insert(7, f"<td>{actual}</td>")
+    result = {
+        "test_id": getattr(item, "test_id", ""),
+        "scenario": getattr(item, "scenario", item.name),
+        "description": getattr(item, "description", ""),
+        "steps": getattr(item, "steps", []),
+        "expected": getattr(item, "expected", ""),
+        "actual": actual,
+        "status": status,
+        "duration": f"{report.duration:.2f}s",
+    }
+
+    RESULTS.append(result)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    report_file = Path("report.html")
+
+    rows = ""
+
+    for result in RESULTS:
+        steps = "<br>".join(
+            html.escape(step) for step in result["steps"]
+        )
+
+        status_class = (
+            "pass"
+            if result["status"] == "PASS"
+            else "fail"
+        )
+
+        rows += f"""
+        <tr>
+            <td>{html.escape(result["test_id"])}</td>
+            <td>{html.escape(result["scenario"])}</td>
+            <td>{html.escape(result["description"])}</td>
+            <td>{steps}</td>
+            <td>{html.escape(result["expected"])}</td>
+            <td>{html.escape(result["actual"])}</td>
+            <td class="{status_class}">
+                {html.escape(result["status"])}
+            </td>
+            <td>{html.escape(result["duration"])}</td>
+        </tr>
+        """
+
+    total = len(RESULTS)
+    passed = sum(
+        1 for result in RESULTS
+        if result["status"] == "PASS"
+    )
+    failed = total - passed
+
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Playwright Test Report</title>
+
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            background-color: #f5f6f7;
+        }}
+
+        h1 {{
+            color: #222;
+        }}
+
+        .summary {{
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+        }}
+
+        .summary-box {{
+            padding: 15px 25px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+        }}
+
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }}
+
+        th {{
+            background-color: #333;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }}
+
+        td {{
+            padding: 12px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+        }}
+
+        .pass {{
+            font-weight: bold;
+        }}
+
+        .fail {{
+            font-weight: bold;
+        }}
+    </style>
+</head>
+
+<body>
+
+<h1>Playwright Test Execution Report</h1>
+
+<div class="summary">
+
+    <div class="summary-box">
+        <strong>Total Tests</strong><br>
+        {total}
+    </div>
+
+    <div class="summary-box">
+        <strong>Passed</strong><br>
+        {passed}
+    </div>
+
+    <div class="summary-box">
+        <strong>Failed</strong><br>
+        {failed}
+    </div>
+
+</div>
+
+<table>
+
+    <thead>
+        <tr>
+            <th>Test ID</th>
+            <th>Scenario</th>
+            <th>Description</th>
+            <th>Test Steps</th>
+            <th>Expected Result</th>
+            <th>Actual Result</th>
+            <th>Status</th>
+            <th>Duration</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {rows}
+    </tbody>
+
+</table>
+
+</body>
+</html>
+"""
+
+    report_file.write_text(
+        html_content,
+        encoding="utf-8"
+    )
