@@ -1,5 +1,3 @@
-// webhook test
-
 pipeline {
     agent any
 
@@ -16,6 +14,19 @@ pipeline {
             steps {
                 bat 'C:\\Users\\User\\AppData\\Local\\Python\\bin\\python.exe -m pytest --html=report.html --self-contained-html'
             }
+        }
+    }
+
+    post {
+        always {
+            publishHTML([
+                reportDir: '',
+                reportFiles: 'report.html',
+                reportName: 'Playwright Test Report',
+                keepAll: true,
+                alwaysLinkToLastBuild: true,
+                allowMissing: false
+            ])
         }
     }
 }
