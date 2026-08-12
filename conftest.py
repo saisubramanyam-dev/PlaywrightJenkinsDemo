@@ -24,9 +24,9 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
+    # Only attach our custom data to the actual test execution
     if report.when == "call":
-        test_name = item.name
-        data = TEST_DATA.get(test_name, {})
+        data = TEST_DATA.get(item.name, {})
 
         report.test_id = data.get("test_id", "")
         report.scenario = data.get("scenario", "")
@@ -34,11 +34,10 @@ def pytest_runtest_makereport(item, call):
         report.steps = data.get("steps", "")
         report.expected = data.get("expected", "")
 
-        # Actual result
         if report.passed:
-            if test_name == "test_login_page_title":
+            if item.name == "test_login_page_title":
                 report.actual = "The Internet"
-            elif test_name == "test_login_page_url":
+            elif item.name == "test_login_page_url":
                 report.actual = "https://the-internet.herokuapp.com/login"
             else:
                 report.actual = "PASS"
@@ -56,11 +55,23 @@ def pytest_html_results_table_header(cells):
 
 
 def pytest_html_results_table_row(report, cells):
-    steps = report.steps.replace("\n", "<br>")
+    # Some pytest-html rows are not the actual test-call report.
+    # Ignore those rows.
+    if not hasattr(report, "test_id"):
+        return
 
-    cells.insert(2, f"<td>{report.test_id}</td>")
-    cells.insert(3, f"<td>{report.scenario}</td>")
-    cells.insert(4, f"<td>{report.description}</td>")
+    test_id = getattr(report, "test_id", "")
+    scenario = getattr(report, "scenario", "")
+    description = getattr(report, "description", "")
+    steps = getattr(report, "steps", "")
+    expected = getattr(report, "expected", "")
+    actual = getattr(report, "actual", "")
+
+    steps = steps.replace("\n", "<br>")
+
+    cells.insert(2, f"<td>{test_id}</td>")
+    cells.insert(3, f"<td>{scenario}</td>")
+    cells.insert(4, f"<td>{description}</td>")
     cells.insert(5, f"<td>{steps}</td>")
-    cells.insert(6, f"<td>{report.expected}</td>")
-    cells.insert(7, f"<td>{report.actual}</td>")
+    cells.insert(6, f"<td>{expected}</td>")
+    cells.insert(7, f"<td>{actual}</td>")
